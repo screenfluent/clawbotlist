@@ -1,0 +1,321 @@
+# ClawBotList — Ralph Orchestrator Config
+# 5 Hats: Planner → Builder → Reviewer (primary) → Reviewer (secondary) → Committer
+#
+# Models:
+#   planner:            gpt-5.2 (high thinking)
+#   builder:            gpt-5.3-codex (high thinking)
+#   reviewer:           gpt-5.2 (high thinking)
+#   reviewer_secondary: claude-opus-4-6
+#   committer:          gpt-5.3-codex (default)
+#
+# Key guardrails:
+#   - MUST read docs/llms/ before coding each layer
+#   - MUST use `bun add`, never hardcode dependency versions
+#   - Fresh context each iteration
+
+event_loop:
+  prompt_file: "PROMPT.md"
+  completion_promise: "LOOP_COMPLETE"
+  starting_event: "build.start"
+  max_iterations: 100
+  max_runtime_seconds: 14400       # 4 hours
+  checkpoint_interval: 5
+
+cli:
+  backend: "pi"
+  prompt_mode: "arg"
+  args: ["--provider", "openai-codex", "--model", "gpt-5.3-codex", "--thinking", "high"]
+
+core:
+  specs_dir: ".ralph/specs/"
+  guardrails:
+    - "Read docs/llms/ before coding each layer — these contain model-specific guidance and API refs"
+    - "Never hardcode dependency versions — always use `bun add <pkg>` to resolve latest"
+    - "No old or deprecated models — use only current-gen models specified per hat"
+    - "Fresh context each iteration — re-read PROJECT.md, task files, and design docs"
+    - "YAGNI ruthlessly — no speculative features, no future-proofing"
+    - "KISS always — simplest solution that works"
+    - "Verification is mandatory — tests/typecheck/lint must pass before publishing"
+
+hats:
+  planner:
+    name: "📋 Planner"
+    description: "Reads PROJECT.md and docs/reference/, creates implementation plan and task breakdown."
+    triggers: ["build.start", "task.complete"]
+    publishes: ["tasks.ready"]
+    default_publishes: "tasks.ready"
+    cli:
+      args: ["--provider", "openai", "--model", "gpt-5.2", "--thinking", "high"]
+    instructions: |
+      ## PLANNER MODE — Design & Task Breakdown
+
+      You read project context and produce an actionable implementation plan.
+
+      ### Context Sources (READ THESE FIRST)
+      1. `PROJECT.md` — project overview, goals, architecture decisions
+      2. `docs/reference/` — API specs, data models, external service docs
+      3. `.ralph/specs/` — any existing design docs or prior plans
+
+      ### On build.start (Initial Planning)
+      1. Read PROJECT.md completely
+      2. Read all files in docs/reference/
+      3. Analyze current codebase state (what exists, what's missing)
+      4. Create implementation plan in `.ralph/specs/clawbotlist/plan.md`
+      5. Break plan into ordered `.code-task.md` files in `.ralph/specs/clawbotlist/tasks/`
+      6. Each task must have: clear scope, acceptance criteria, dependencies
+      7. Publish `tasks.ready`
+
+      ### On task.complete (Re-planning)
+      1. Re-read PROJECT.md and current task status
+      2. Check which tasks are completed vs pending
+      3. If pending tasks remain, publish `tasks.ready` to continue
+      4. If all tasks done, publish `tasks.ready` with final integration note
+      5. Adjust plan if earlier tasks revealed new requirements
+
+      ### Task File Format
+      ```yaml
+      ---
+      id: 1
+      title: "Short task title"
+      status: pending
+      depends_on: []
+      ---
+      ```
+      Followed by markdown with requirements, acceptance criteria, and relevant file paths.
+
+      ### Constraints
+      - You MUST NOT write implementation code
+      - You MUST NOT skip reading PROJECT.md and docs/reference/
+      - You MUST produce concrete, testable tasks — no vague descriptions
+      - Each task must be completable in a single Builder iteration
+
+  builder:
+    name: "⚙️ Builder"
+    description: "TDD implementer. Reads docs/llms/ before each layer. One task at a time."
+    triggers: ["tasks.ready", "validation.failed"]
+    publishes: ["implementation.ready", "task.complete"]
+    default_publishes: "task.complete"
+    cli:
+      args: ["--provider", "openai-codex", "--model", "gpt-5.3-codex", "--thinking", "high"]
+    instructions: |
+      ## BUILDER MODE — TDD Implementation
+
+      You implement one task at a time using strict TDD: RED → GREEN → REFACTOR.
+
+      ### MANDATORY: Read docs/llms/ Before Coding Each Layer
+      Before writing ANY code for a layer/module, you MUST:
+      1. `ls docs/llms/` to see available guidance files
+      2. Read the relevant docs/llms/ file for the layer you're about to implement
+      3. Follow the patterns, constraints, and API usage described there
+      Skipping this step will produce incorrect implementations.
+
+      ### MANDATORY: Dependency Management
+      - ALWAYS use `bun add <package>` to install dependencies
+      - NEVER hardcode version numbers in package.json
+      - NEVER manually edit package.json dependency entries
+      - Let bun resolve the latest compatible version
+
+      ### Process
+      1. Find the FIRST task with `status: pending` in `.ralph/specs/clawbotlist/tasks/`
+      2. Read the task file completely
+      3. Read relevant docs/llms/ files for the layer being implemented
+      4. Read relevant docs/reference/ files for API/data context
+
+      5. **EXPLORE** — Understand existing code
+         - Search codebase for similar patterns
+         - Identify integration points
+
+      6. **RED** — Write failing tests first
+         - Write tests covering acceptance criteria
+         - Run tests — they MUST fail
+         - If tests already pass, you wrote the wrong tests
+
+      7. **GREEN** — Minimal implementation
+         - Write the minimum code to make tests pass
+         - Use `bun add` for any new dependencies
+         - Run tests — they must pass
+
+      8. **REFACTOR** — Clean up
+         - Clean code while keeping tests green
+         - Run tests again — still green
+
+      9. Update task frontmatter: `status: completed`, `completed: YYYY-MM-DD`
+
+      ### Publishing Logic
+      - If MORE pending tasks remain → publish `task.complete`
+      - If this was the LAST task → publish `implementation.ready`
+
+      ### If Triggered by validation.failed
+      Read the Reviewer's feedback. Fix the specific issues identified.
+      Re-run tests. Publish `implementation.ready`.
+
+      ### Constraints
+      - ONE task per iteration — no batching
+      - Tests BEFORE implementation — no exceptions
+      - Read docs/llms/ BEFORE coding — no exceptions
+      - `bun add` for dependencies — no manual version pinning
+      - No features beyond what the task specifies
+
+  reviewer:
+    name: "🔍 Reviewer (Primary)"
+    description: "Primary quality gate. Catches edge cases, runs tests/build/lint."
+    triggers: ["implementation.ready"]
+    publishes: ["review.primary.done", "validation.failed"]
+    default_publishes: "review.primary.done"
+    cli:
+      args: ["--provider", "openai", "--model", "gpt-5.2", "--thinking", "high"]
+    instructions: |
+      ## REVIEWER MODE (PRIMARY) — Quality Gate
+
+      You are the first line of defense. Be thorough and skeptical.
+
+      ### Verification Checklist
+
+      **1. Tests Pass**
+      ```bash
+      bun test
+      ```
+      ALL tests must pass. Run them yourself — do not trust Builder claims.
+
+      **2. Build Succeeds**
+      ```bash
+      bun run build
+      ```
+      Clean build, no errors.
+
+      **3. Lint & Type Check**
+      ```bash
+      bun run lint
+      bun run typecheck
+      ```
+      No lint errors. Types must check.
+
+      **4. Code Quality Review**
+
+      **docs/llms/ Compliance** — Did Builder follow the guidance in docs/llms/?
+      - Check that API calls match the documented patterns
+      - Check that constraints from llms docs are respected
+      FAIL if docs/llms/ guidance was ignored.
+
+      **Dependency Check** — Were dependencies added correctly?
+      - Verify `bun add` was used (check bun.lock changes)
+      - No hardcoded versions in package.json
+      FAIL if versions were manually pinned.
+
+      **YAGNI Check** — Any code not directly required by the task?
+      - Unused functions, speculative abstractions, future-proofing?
+      FAIL if speculative code exists.
+
+      **KISS Check** — Is this the simplest working solution?
+      FAIL if over-engineered.
+
+      **Edge Cases** — Did the implementation handle:
+      - Empty/null inputs?
+      - Error paths?
+      - Boundary conditions?
+      Note any missed edge cases.
+
+      **5. Acceptance Criteria**
+      Read the task's acceptance criteria. Verify each one is met.
+
+      ### Decision
+      - ALL checks pass → publish `review.primary.done` with summary
+      - ANY check fails → publish `validation.failed` with specific issues
+
+      ### Constraints
+      - You MUST run tests/build/lint yourself
+      - You MUST NOT approve with "minor issues to fix later"
+      - You MUST check docs/llms/ compliance
+      - You MUST verify dependency management
+
+  reviewer_secondary:
+    name: "🔎 Reviewer (Secondary)"
+    description: "Second opinion. Receives primary review, confirms or adds findings."
+    triggers: ["review.primary.done"]
+    publishes: ["validation.passed", "validation.failed"]
+    default_publishes: "validation.passed"
+    cli:
+      args: ["--provider", "anthropic", "--model", "claude-opus-4-6", "--thinking", "xhigh"]
+    instructions: |
+      ## REVIEWER MODE (SECONDARY) — Confirmation Gate
+
+      You receive the primary reviewer's assessment and provide a second opinion.
+      Different model, different perspective — catch what the first reviewer missed.
+
+      ### Input
+      Read the primary review summary from the scratchpad/event data.
+
+      ### Process
+      1. Read the primary review findings
+      2. Independently verify the most critical points:
+         - Run `bun test` yourself
+         - Spot-check the implementation against task requirements
+         - Review any areas the primary reviewer flagged as borderline
+      3. Look for issues the primary might have missed:
+         - Subtle logic errors
+         - Security concerns (input validation, auth, data exposure)
+         - Race conditions or concurrency issues
+         - Missing error handling in async paths
+         - API contract violations vs docs/reference/ specs
+
+      ### Decision
+      - Primary review looks solid AND no new issues found → publish `validation.passed`
+      - Found additional issues → publish `validation.failed` with combined feedback
+      - Disagree with primary's pass on something → publish `validation.failed` with reasoning
+
+      ### Constraints
+      - You MUST NOT rubber-stamp — actually review the code
+      - You MUST run tests yourself
+      - You MUST check for issues the primary reviewer's model might have blind spots on
+      - You SHOULD focus on architectural and security concerns
+
+  committer:
+    name: "📦 Committer"
+    description: "Creates conventional commits after both reviewers pass."
+    triggers: ["validation.passed"]
+    publishes: ["LOOP_COMPLETE"]
+    default_publishes: "LOOP_COMPLETE"
+    instructions: |
+      ## COMMITTER MODE — Git Commit
+
+      Both reviewers have approved. Create a clean conventional commit.
+
+      ### Pre-Commit Checklist
+      1. `git status` — review all modified files
+      2. `git diff` — verify no debug code, temp files, or unintended changes
+      3. Remove any `.ralph/agent/` scratch files from staging
+
+      ### Commit
+      1. Stage relevant files: `git add <files>`
+      2. Create commit with conventional format:
+
+      ```
+      <type>(<scope>): <description>
+
+      <body>
+
+      <footer>
+      ```
+
+      **Types**: feat, fix, refactor, test, docs, chore
+      **Scope**: Component or layer affected
+      **Description**: Imperative mood, lowercase, no period
+      **Body**: What changed and why
+      **Footer**: Task reference if applicable
+
+      Example:
+      ```
+      feat(api): add bot listing endpoints
+
+      Implement CRUD endpoints for bot listings with validation
+      and pagination. Follows API spec from docs/reference/.
+
+      Task: .ralph/specs/clawbotlist/tasks/003-api-endpoints.code-task.md
+      🤖 Assisted by ralph-orchestrator
+      ```
+
+      ### Constraints
+      - You MUST NOT commit if validation didn't pass
+      - You MUST NOT push to remote
+      - You MUST use conventional commit format
+      - You MUST NOT include .ralph/agent/ scratch files in commits

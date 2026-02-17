@@ -1,0 +1,27 @@
+docs/llms/
+.ralph/agent/
+.agents/
+node_modules/
+.wrangler/
+.env
+
+# SvelteKit
+.svelte-kit/
+build/
+
+# Environment
+.env.local
+.env.production
+
+# OS
+.DS_Store
+
+# Cloudflare
+.dev.vars
+
+# Misc
+dist/
+*.log
+
+# Reference code (third-party, not part of project)
+docs/reference/
