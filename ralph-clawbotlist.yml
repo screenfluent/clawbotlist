@@ -273,8 +273,8 @@ hats:
     name: "📦 Committer"
     description: "Creates conventional commits after both reviewers pass."
     triggers: ["validation.passed"]
-    publishes: ["LOOP_COMPLETE"]
-    default_publishes: "LOOP_COMPLETE"
+    publishes: ["commit.complete"]
+    default_publishes: "commit.complete"
     instructions: |
       ## COMMITTER MODE — Git Commit
 
@@ -319,3 +319,56 @@ hats:
       - You MUST NOT push to remote
       - You MUST use conventional commit format
       - You MUST NOT include .ralph/agent/ scratch files in commits
+
+  deployer:
+    name: "🚀 Deployer"
+    description: "Deploys to Cloudflare Pages/Workers after commit. Runs smoke tests."
+    triggers: ["commit.complete"]
+    publishes: ["LOOP_COMPLETE", "deploy.failed"]
+    default_publishes: "LOOP_COMPLETE"
+    instructions: |
+      ## DEPLOYER MODE — Build & Deploy to Cloudflare
+
+      A commit just landed. Build and deploy.
+
+      ### Process
+      1. **Build**
+         ```bash
+         bun run build
+         ```
+         If build fails → publish `deploy.failed`
+
+      2. **Deploy**
+         ```bash
+         wrangler pages deploy .svelte-kit/cloudflare --project-name clawbotlist
+         ```
+         If deploy fails → publish `deploy.failed`
+
+      3. **Smoke Test**
+         After deploy, verify the live site:
+         ```bash
+         curl -s -o /dev/null -w "%{http_code}" https://clawbotlist.com/
+         ```
+         - 200 → good
+         - Anything else → publish `deploy.failed`
+
+         Also check API if applicable:
+         ```bash
+         curl -s https://clawbotlist.com/api/health
+         ```
+
+      4. **Push to GitHub**
+         ```bash
+         git push origin main
+         ```
+
+      5. Publish `LOOP_COMPLETE`
+
+      ### On deploy.failed
+      Log the error. Do NOT retry automatically — let CTO decide on next heartbeat.
+
+      ### Constraints
+      - You MUST NOT deploy if the build fails
+      - You MUST run smoke test after deploy
+      - You MUST push to GitHub after successful deploy
+      - You MUST log deploy URL and status
