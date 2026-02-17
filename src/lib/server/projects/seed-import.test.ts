@@ -49,6 +49,15 @@ describe('seed import pipeline', () => {
 		expect(mapped.topics).toEqual(['ai']);
 	});
 
+	it('emits SQL compatible with wrangler d1 execute (no explicit transaction wrapper)', () => {
+		const parsed = parseSeedProjects(readSeedFixture());
+		const sql = buildSeedUpsertSql([mapSeedProjectToProjectRow(parsed[0])]);
+
+		expect(sql).not.toMatch(/BEGIN TRANSACTION/i);
+		expect(sql).not.toMatch(/\bCOMMIT\b/i);
+		expect(sql).toContain('INSERT INTO projects');
+	});
+
 	it('upserts idempotently without creating duplicates when re-imported', () => {
 		const db = new Database(':memory:');
 		db.exec(readFileSync(migrationPath, 'utf8'));

@@ -34,6 +34,27 @@ describe('ops quality gates + deploy runbook', () => {
 		expect(existsSync(smokeTestPath)).toBe(true);
 	});
 
+	it('configures wrangler D1 migrations directory for scripted apply commands', () => {
+		const wranglerPath = join(process.cwd(), 'wrangler.jsonc');
+		expect(existsSync(wranglerPath)).toBe(true);
+
+		const wrangler = JSON.parse(readFileSync(wranglerPath, 'utf8')) as {
+			d1_databases?: Array<{ migrations_dir?: string }>;
+		};
+		const binding = wrangler.d1_databases?.[0];
+
+		expect(binding?.migrations_dir).toBe('drizzle');
+	});
+
+	it('keeps initial SQL migration replay-safe for existing databases', () => {
+		const migrationPath = join(process.cwd(), 'drizzle', '0000_faulty_chat.sql');
+		expect(existsSync(migrationPath)).toBe(true);
+
+		const sql = readFileSync(migrationPath, 'utf8');
+		expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS `projects`/);
+		expect(sql).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS `projects_slug_unique`/);
+	});
+
 	it('documents local/dev/prod workflow, env vars, and troubleshooting', () => {
 		const runbookPath = join(process.cwd(), 'docs/deploy.md');
 		expect(existsSync(runbookPath)).toBe(true);

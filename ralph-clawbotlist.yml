@@ -41,8 +41,8 @@ hats:
   planner:
     name: "📋 Planner"
     description: "Reads PROJECT.md and docs/reference/, creates implementation plan and task breakdown."
-    triggers: ["build.start"]
-    publishes: ["tasks.ready"]
+    triggers: ["build.start", "task.complete"]
+    publishes: ["tasks.ready", "implementation.ready"]
     default_publishes: "tasks.ready"
     cli:
       args: ["--provider", "openai", "--model", "gpt-5.2", "--thinking", "high"]
@@ -68,9 +68,10 @@ hats:
       ### On task.complete (Re-planning)
       1. Re-read PROJECT.md and current task status
       2. Check which tasks are completed vs pending
-      3. If pending tasks remain, publish `tasks.ready` to continue
-      4. If all tasks done, publish `tasks.ready` with final integration note
-      5. Adjust plan if earlier tasks revealed new requirements
+      3. If pending tasks remain → publish `tasks.ready`
+      4. If ALL tasks completed → publish `implementation.ready` (sends to reviewer)
+      5. You MUST publish `implementation.ready` when no pending tasks remain
+      6. You MUST NOT publish `tasks.ready` when all tasks are done
 
       ### Task File Format
       ```yaml
@@ -93,8 +94,8 @@ hats:
     name: "⚙️ Builder"
     description: "TDD implementer. Reads docs/llms/ before each layer. One task at a time."
     triggers: ["tasks.ready", "validation.failed"]
-    publishes: ["implementation.ready", "tasks.ready"]
-    default_publishes: "implementation.ready"
+    publishes: ["task.complete"]
+    default_publishes: "task.complete"
     cli:
       args: ["--provider", "openai-codex", "--model", "gpt-5.3-codex", "--thinking", "high"]
     instructions: |
@@ -142,12 +143,12 @@ hats:
       9. Update task frontmatter: `status: completed`, `completed: YYYY-MM-DD`
 
       ### Publishing Logic
-      - If MORE pending tasks remain → publish `tasks.ready` (triggers yourself for next task)
-      - If ALL tasks completed → publish `implementation.ready` (triggers reviewer)
+      Always publish `task.complete`. The Planner decides what happens next.
+      You MUST NOT publish any other event.
 
       ### If Triggered by validation.failed
       Read the Reviewer's feedback. Fix the specific issues identified.
-      Re-run tests. Publish `implementation.ready`.
+      Re-run tests. Publish `task.complete`.
 
       ### Constraints
       - ONE task per iteration — no batching

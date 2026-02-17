@@ -158,8 +158,7 @@ export const buildSeedUpsertSql = (rows: SeedProjectDbRow[]): string => {
 		})
 		.join(',\n');
 
-	return `BEGIN TRANSACTION;
-INSERT INTO projects (
+	return `INSERT INTO projects (
 	name,
 	slug,
 	tagline,
@@ -201,8 +200,7 @@ ON CONFLICT(slug) DO UPDATE SET
 	watchers = excluded.watchers,
 	last_commit_at = excluded.last_commit_at,
 	health_score = excluded.health_score,
-	updated_at = unixepoch();
-COMMIT;`;
+	updated_at = unixepoch();`;
 };
 
 export interface SeedImportResult {

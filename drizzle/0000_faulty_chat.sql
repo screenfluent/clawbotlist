@@ -1,4 +1,4 @@
-CREATE TABLE `projects` (
+CREATE TABLE IF NOT EXISTS `projects` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,
 	`slug` text NOT NULL,
@@ -24,9 +24,9 @@ CREATE TABLE `projects` (
 	`updated_at` integer DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `projects_slug_unique` ON `projects` (`slug`);--> statement-breakpoint
-CREATE INDEX `projects_language_idx` ON `projects` (`language`);--> statement-breakpoint
-CREATE INDEX `projects_engine_idx` ON `projects` (`engine`);--> statement-breakpoint
-CREATE INDEX `projects_stars_idx` ON `projects` (`stars`);--> statement-breakpoint
-CREATE INDEX `projects_health_score_idx` ON `projects` (`health_score`);--> statement-breakpoint
-CREATE INDEX `projects_last_commit_at_idx` ON `projects` (`last_commit_at`);
+CREATE UNIQUE INDEX IF NOT EXISTS `projects_slug_unique` ON `projects` (`slug`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `projects_language_idx` ON `projects` (`language`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `projects_engine_idx` ON `projects` (`engine`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `projects_stars_idx` ON `projects` (`stars`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `projects_health_score_idx` ON `projects` (`health_score`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `projects_last_commit_at_idx` ON `projects` (`last_commit_at`);
