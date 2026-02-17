@@ -41,7 +41,7 @@ hats:
   planner:
     name: "📋 Planner"
     description: "Reads PROJECT.md and docs/reference/, creates implementation plan and task breakdown."
-    triggers: ["build.start", "task.complete"]
+    triggers: ["build.start"]
     publishes: ["tasks.ready"]
     default_publishes: "tasks.ready"
     cli:
@@ -93,8 +93,8 @@ hats:
     name: "⚙️ Builder"
     description: "TDD implementer. Reads docs/llms/ before each layer. One task at a time."
     triggers: ["tasks.ready", "validation.failed"]
-    publishes: ["implementation.ready", "task.complete"]
-    default_publishes: "task.complete"
+    publishes: ["implementation.ready", "tasks.ready"]
+    default_publishes: "implementation.ready"
     cli:
       args: ["--provider", "openai-codex", "--model", "gpt-5.3-codex", "--thinking", "high"]
     instructions: |
@@ -142,8 +142,8 @@ hats:
       9. Update task frontmatter: `status: completed`, `completed: YYYY-MM-DD`
 
       ### Publishing Logic
-      - If MORE pending tasks remain → publish `task.complete`
-      - If this was the LAST task → publish `implementation.ready`
+      - If MORE pending tasks remain → publish `tasks.ready` (triggers yourself for next task)
+      - If ALL tasks completed → publish `implementation.ready` (triggers reviewer)
 
       ### If Triggered by validation.failed
       Read the Reviewer's feedback. Fix the specific issues identified.
