@@ -4,7 +4,7 @@
 </script>
 
 <svelte:head>
-	<meta name="color-scheme" content="dark" />
+	<meta name="color-scheme" content="light dark" />
 </svelte:head>
 
 {@render children()}
